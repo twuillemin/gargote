@@ -1,0 +1,36 @@
+test_name: Test with the typicode API
+stages:
+  - stage_name: Basic API usage
+    delay_before: 100
+    delay_after: 100
+    actions:
+      - action_name: Get a TODO
+        query:
+          url: https://jsonplaceholder.typicode.com/todos/1
+          method: GET
+          headers:
+            Accept: application/json
+        response:
+          validation:
+            status_code:
+              - 200
+          capture:
+            body_json:
+              # Bind the field { "userId": "..." } to the variables the_user_id
+              userId: the_user_id
+
+      - action_name: Get the user of the previous TODO
+        query:
+          # Use the variable the_user_id to patch URL
+          url: https://jsonplaceholder.typicode.com/users/{{ .the_user_id }}
+          method: GET
+          headers:
+            Accept: application/json
+        response:
+          validation:
+            status_code:
+              - 200
+            body_json:
+              # Check the the field { "company": {"name": "Romaguera-Crona"} } with a RegExp
+              company.name: Roma.uera-.*
+
