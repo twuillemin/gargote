@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -18,13 +19,18 @@ import (
 // RunAction executes a single Action.
 //
 // Params:
+//  - testIndex: the test number
+//  - stageIndex: the stage number
+//  - actionIndex: The action number
 //  - action: the Action to execute
 //  - variables: the existing variables. Note that the map is updated is the action has Capture elements.
 //
 // Return an error if the action fail, nil otherwise
-func RunAction(action definition.Action, variables map[string]interface{}) error {
+func RunAction(testIndex uint, stageIndex uint, actionIndex uint, action definition.Action, variables map[string]interface{}) error {
 
-	log.Infof("Doing %s", action.Name)
+	stageTitle := fmt.Sprintf("Action %v-%v-%v:", testIndex, stageIndex, actionIndex)
+
+	log.Infof("%s starting %s", stageTitle, action.Name)
 
 	// Use a default timeout of 1 minute if nothing specified
 	timeout := 1 * time.Minute
@@ -40,32 +46,32 @@ func RunAction(action definition.Action, variables map[string]interface{}) error
 	// Prepare the query
 	req, err := prepareQuery(variables, action.Query)
 	if err != nil {
-		log.Warnf("---> Error while preparing the query %v", err)
+		log.Warnf("%s ---> Error while preparing the query %v", stageTitle, err)
 		return err
 	}
 
 	// Make the actual query
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Warnf("---> Error while sending query %v", err)
+		log.Warnf("%s ---> Error while sending query %v", stageTitle, err)
 		return err
 	}
 
 	if resp == nil {
-		log.Warnf("---> No response Received")
+		log.Warnf("%s ---> No response Received", stageTitle)
 		return errors.New("no response received to query")
 	}
 
 	// Read the body as it is used by check and save
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Warnf("---> Unable to read the body")
+		log.Warnf("%s ---> Unable to read the body", stageTitle)
 		return err
 	}
 
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			log.Errorf("Unable to close the body of the response due to %v", err)
+			log.Errorf("%s unable to close the body of the response due to %v", stageTitle, err)
 		}
 	}()
 
@@ -79,7 +85,7 @@ func RunAction(action definition.Action, variables map[string]interface{}) error
 		return err
 	}
 
-	log.Info("---> OK")
+	log.Infof("%s ---> OK", stageTitle)
 	return nil
 }
 
@@ -92,8 +98,7 @@ func prepareQuery(variables map[string]interface{}, query definition.Query) (*ht
 		//
 		stringToSend, err := formatString(query.BodyText, variables)
 		if err != nil {
-			log.Errorf("---> The definition of the text body is not usable due to %v", err)
-			return nil, err
+			return nil, fmt.Errorf("the definition of the text body is not usable due to %v", err)
 		}
 
 		bodyToSend = []byte(stringToSend)
@@ -102,22 +107,19 @@ func prepareQuery(variables map[string]interface{}, query definition.Query) (*ht
 
 		jsonToSend, err := prepareJSONBody(variables, query.BodyJSON)
 		if err != nil {
-			log.Errorf("---> The definition of the json body is not usable due to %v", err)
-			return nil, err
+			return nil, fmt.Errorf("the definition of the json body is not usable due to %v", err)
 		}
 
 		jsonBody, err := json.Marshal(jsonToSend)
 		if err != nil {
-			log.Errorf("---> The definition of the json body is not convertible to json due to %v", err)
-			return nil, err
+			return nil, fmt.Errorf("the definition of the json body is not convertible to json due to %v", err)
 		}
 		bodyToSend = jsonBody
 	}
 
 	url, err := formatString(query.URL, variables)
 	if err != nil {
-		log.Errorf("---> The definition of the URL is not usable due to %v", err)
-		return nil, err
+		return nil, fmt.Errorf("the definition of the URL is not usable due to %v", err)
 	}
 
 	// Make the base request
@@ -133,8 +135,7 @@ func prepareQuery(variables map[string]interface{}, query definition.Query) (*ht
 	for k, v := range query.Headers {
 		formatted, err := formatString(v, variables)
 		if err != nil {
-			log.Errorf("---> The definition of the headers is not usable due to %v", err)
-			return nil, err
+			return nil, fmt.Errorf("the definition of the headers is not usable due to %v", err)
 		}
 
 		req.Header.Add(k, formatted)
@@ -145,8 +146,7 @@ func prepareQuery(variables map[string]interface{}, query definition.Query) (*ht
 
 		formatted, err := formatString(v, variables)
 		if err != nil {
-			log.Errorf("---> The definition of the parameters is not usable due to %v", err)
-			return nil, err
+			return nil, fmt.Errorf("the definition of the parameters is not usable due to %v", err)
 		}
 
 		req.URL.Query().Add(k, formatted)
@@ -211,8 +211,7 @@ func prepareJSONBody(variables map[string]interface{}, source interface{}) (inte
 		return formatString(sourceType, variables)
 
 	default:
-		log.Warnf("---> The definition of the body is using not supported data format", reflect.TypeOf(sourceType).String())
-		return nil, errors.New("the body is having unsupported data")
+		return nil, fmt.Errorf("the definition of the body is using not supported data format (%v)", reflect.TypeOf(sourceType).String())
 	}
 }
 
@@ -229,8 +228,7 @@ func checkResponse(resp *http.Response, body []byte, check definition.Validation
 		}
 
 		if !codeReceivedAccepted {
-			log.Warnf("---> Received Bad Status %d (Expected: %v)", resp.StatusCode, check.StatusCodes)
-			return errors.New("no response received to query")
+			return fmt.Errorf("received Bad Status %d (Expected: %v)", resp.StatusCode, check.StatusCodes)
 		}
 	}
 
@@ -241,8 +239,7 @@ func checkResponse(resp *http.Response, body []byte, check definition.Validation
 
 			responseHeader := resp.Header.Get(headerName)
 			if len(responseHeader) == 0 || responseHeader != expectedValue {
-				log.Warnf("---> Expected '%s' for response header '%s', but was not received", expectedValue, headerName)
-				return errors.New("missing expected header")
+				return fmt.Errorf("expected '%s' for response header '%s', but was not received", expectedValue, headerName)
 			}
 		}
 	}
@@ -250,8 +247,7 @@ func checkResponse(resp *http.Response, body []byte, check definition.Validation
 	if len(check.BodyJSON) > 0 || len(check.BodyText) > 0 {
 
 		if len(body) == 0 {
-			log.Warnf("---> Body should be checked, but can not be read from response")
-			return errors.New("unable to read the response's body")
+			return fmt.Errorf("body should be checked, but can not be read from response")
 		}
 
 		// Check the body against a Regex
@@ -260,28 +256,24 @@ func checkResponse(resp *http.Response, body []byte, check definition.Validation
 			matched, err := regexp.Match(check.BodyText, body)
 
 			if err != nil {
-				log.Warnf("---> Body text should be checked against the RegExp '%v' but the RegExp is probably malformed", check.BodyText)
-				return errors.New("malformed body check regexp")
+				return fmt.Errorf("body text should be checked against the RegExp '%v' but the RegExp is probably malformed", check.BodyText)
 			}
 
 			if !matched {
-				log.Warn("---> Body of the query is not matching the expected RegExp")
-				return errors.New("response's body does not match")
+				return fmt.Errorf("body of the query is not matching the expected RegExp")
 			}
 		}
 
 		if len(check.BodyJSON) > 0 {
 			var data interface{}
 			if err := json.Unmarshal(body, &data); err != nil {
-				log.Warn("---> Body text should be checked against JSON, but the body can not be converted to JSON")
-				return errors.New("response's body is not JSON")
+				return fmt.Errorf("body text should be checked against JSON, but the body can not be converted to JSON")
 			}
 
 			// Check the body against a Regex
 			for jsonKey, jsonValue := range check.BodyJSON {
 				if err := checkJSONValue(data, jsonKey, jsonValue); err != nil {
-					log.Warnf("---> An expected value is the JSON response can not be found : %v", err)
-					return err
+					return fmt.Errorf("an expected value is the JSON response can not be found : %v", err)
 				}
 			}
 		}
@@ -309,16 +301,14 @@ func saveResponse(resp *http.Response, body []byte, save definition.Capture, var
 		var jsonBody interface{}
 
 		if err := json.Unmarshal(body, &jsonBody); err != nil {
-			log.Warnf("---> Expected a response with a JSON body, but was not readable due to %v", err)
-			return errors.New("response body is not JSON")
+			return fmt.Errorf("expected a response with a JSON body, but was not readable due to %v", err)
 		}
 
 		for jsonKey, variableName := range save.BodyJSON {
 
 			jsonValue, err := getJSONValue(jsonBody, jsonKey)
 			if err != nil {
-				log.Warnf("---> Expected a response with a JSON having a value for the key '%s'", jsonKey)
-				return errors.New("response json body is missing request key")
+				return fmt.Errorf("expected a response with a JSON having a value for the key '%s'", jsonKey)
 			}
 			variables[variableName] = jsonValue
 		}

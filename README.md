@@ -7,6 +7,7 @@ execute. Although this may seem limited, Gargote offers some nice features:
  * Validation of the result of a query using RegExp
  * Capture of the result of a query
  * Usage of captured values to inject in next query
+ * Swarm mode (load testing)
  
 The capture/inject feature allows to build easily complex scenarios, for example getting an authentication token in the
 body of a response and injecting it in the header of the next query.
@@ -18,8 +19,19 @@ body of a response and injecting it in the header of the next query.
 
 # History and status
 
-Current version is also the initial version v0.0.1. A lot of features and options are still missing, and some bugs are
-probably remaining. However, the information describe in the following documentation "should" work.
+Currently, a some features and options are still missing, and some bugs are probably remaining. However, Gargote is 
+usable and the information describe in the documentation "should" just work.
+
+ * v0.0.2: 
+   * Add the swarm mode
+   * Add option continue on stage failure
+ * v0.0.1: Initial version
+ 
+Main coming features:
+
+ * Keeping track of the result of each query (time, success, etc)
+ * Exporting results and statistics
+ * Some kind of UI ?
 
 # Configuration file
 The configuration file is a yaml file. Apart from being more readable than JSON, it also allows to comment the tests.
@@ -34,7 +46,18 @@ The structure is the following:
 | Attribute name | Type | Description |
 | --- | --- | --- |
 | test_name | string | The name of the test _(Mandatory)_|
+| continue_on_stage_failure | bool | if true, in case of a stage failing, the test will follow up at the next stage (Default: false) |
 | stages | List of Stage | The stages |
+| swarm | An object Swarm | The configuration of the swarm |
+
+### The swarm
+
+| Attribute name | Type | Description |
+| --- | --- | --- |
+| number_of_runs | uint | The number of times the test will be run (Default: 1) |
+| creation_rate | uint | The number of times that a new test is started by second (Default: 1)|
+
+The swarm parameter allows to execute multiple times the same test, generating load on the server.
 
 ## The stage
 
@@ -177,6 +200,54 @@ response:
     body_json: 
       "userId": id_of_connected_user
 ```
+
+# Full example
+The following example run two GET queries against the Typicode. The test is run just one time and will inject the data 
+coming from the first query in the second.
+
+```yaml
+test_name: Test with the Typicode API
+continue_on_stage_failure: false
+swarm:
+  number_of_runs: 1
+  creation_rate: 1
+stages:
+  - stage_name: Basic API usage
+    delay_before: 50
+    delay_after: 100
+    actions:
+      - action_name: Get a todo 
+        query:
+          url: https://jsonplaceholder.typicode.com/todos/1
+          method: GET
+          headers:
+            Accept: application/json
+        response:
+          validation:
+            status_code:
+              - 200
+          capture:
+            body_json:
+              # Bind the field { "userId": "..." } to the variables the_user_id
+              userId: the_user_id
+
+      - action_name: Get the user of the previous todo
+        query:
+          # Use the variable the_user_id to patch URL
+          url: https://jsonplaceholder.typicode.com/users/{{ .the_user_id }}
+          method: GET
+          headers:
+            Accept: application/json
+        response:
+          validation:
+            status_code:
+              - 200
+            body_json:
+              # Check the the field { "company": {"name": "Romaguera-Crona"} } with a RegExp
+              company.name: Roma.uera-.*
+```
+
+The _continue_on_stage_failure_ is not useful in this example as there is only a single stage.  
 
 # License
 

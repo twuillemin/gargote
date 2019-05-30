@@ -1,13 +1,11 @@
 package main
 
 import (
-	"io/ioutil"
+	"github.com/twuillemin/gargote/pkg/loader"
 	"os"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/twuillemin/gargote/pkg/definition"
 	"github.com/twuillemin/gargote/pkg/runner"
-	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -23,11 +21,13 @@ func main() {
 		FullTimestamp: false,
 	})
 
+	log.SetLevel(log.InfoLevel)
+
 	log.Info("Starting...")
 
 	//generateTemp()
 
-	test, err := readFile(fileName)
+	test, err := loader.LoadFromFile(fileName)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,23 +39,6 @@ func main() {
 	}
 
 	log.Info("Finished successfully...\n")
-}
-
-func readFile(fileName string) (*definition.Test, error) {
-
-	data, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	var test definition.Test
-	err = yaml.Unmarshal(data, &test)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &test, nil
 }
 
 // For now keep the following function just in case

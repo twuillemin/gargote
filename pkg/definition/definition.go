@@ -26,10 +26,18 @@ const (
 	HEAD
 )
 
-// Test is the structure of a test. The test is the higher level object. A Test is compose dof various Stages.
+// Test is the structure of a test. The test is the higher level object. A Test is compose of various Stages.
 type Test struct {
-	TestName string  `yaml:"test_name"`
-	Stages   []Stage `yaml:"stages"`
+	TestName               string  `yaml:"test_name"`
+	ContinueOnStageFailure bool    `yaml:"continue_on_stage_failure"`
+	Stages                 []Stage `yaml:"stages"`
+	Swarm                  Swarm   `yaml:"swarm,omitempty"`
+}
+
+// Swarm is the structure defining the startup options
+type Swarm struct {
+	NumberOfRuns uint `yaml:"number_of_runs"`
+	CreationRate uint `yaml:"creation_rate"`
 }
 
 // Stage is a logical partition inside a Test. A Stage is composed of various Actions.

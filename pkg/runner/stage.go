@@ -10,14 +10,14 @@ import (
 // RunStage executes a single Stage.
 //
 // Params:
+//  - testIndex: the test number
+//  - stageIndex: the stage number
 //  - stage: the Stage to execute
 //
 // Return an error if the action fail, nil otherwise
-func RunStage(stage definition.Stage) error {
+func RunStage(testIndex uint, stageIndex uint, stage definition.Stage) error {
 
-	log.Info("----------------------------------------------------")
-	log.Infof("-           Start stage: %s", stage.Name)
-	log.Info("----------------------------------------------------")
+	log.Infof("Stage %v-%v: starting ", testIndex, stageIndex)
 
 	start := time.Now()
 
@@ -34,8 +34,8 @@ func RunStage(stage definition.Stage) error {
 			time.Sleep(time.Duration(stage.DelayBefore) * time.Millisecond)
 		}
 
-		for _, action := range stage.Actions {
-			err = RunAction(action, variables)
+		for actionIndex, action := range stage.Actions {
+			err = RunAction(testIndex, stageIndex, uint(actionIndex), action, variables)
 			if err != nil {
 				log.Warnf("End of try %v of stage", tryNumber)
 				break
@@ -55,8 +55,7 @@ func RunStage(stage definition.Stage) error {
 
 	elapsed := time.Since(start)
 
-	log.Infof("Stage total duration %v - %v try(ies) (including %v ms of delay)", elapsed, tryNumber, (stage.DelayBefore+stage.DelayAfter)*uint(tryNumber))
-	log.Infof("Variables at the end of the stage: %v", variables)
+	log.Infof("Stage %v-%v: Finished - total duration: %v, %v try(ies) (including %v ms of delay)", testIndex, stageIndex, elapsed, tryNumber, (stage.DelayBefore+stage.DelayAfter)*uint(tryNumber))
 
 	return err
 }

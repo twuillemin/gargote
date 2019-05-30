@@ -1,7 +1,11 @@
 test_name: Test with the typicode API
+continue_on_stage_failure: false
+swarm:
+  number_of_runs: 1
+  creation_rate: 1
 stages:
   - stage_name: Basic API usage
-    delay_before: 100
+    delay_before: 50
     delay_after: 100
     actions:
       - action_name: Get a TODO

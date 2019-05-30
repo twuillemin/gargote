@@ -1,6 +1,8 @@
 package runner
 
 import (
+	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -15,26 +17,52 @@ import (
 // Return an error if the action fail, nil otherwise
 func RunTest(test definition.Test) error {
 
-	log.Info("====================================================")
-	log.Info("=")
-	log.Infof("=           Start test: %s ", test.TestName)
-	log.Info("=")
-	log.Info("====================================================")
+	fmt.Printf("====================================================\n")
+	fmt.Printf("=\n")
+	fmt.Printf("=         Test: %s \n", test.TestName)
+	fmt.Printf("=\n")
+	fmt.Printf("====================================================\n")
+
+	var wg sync.WaitGroup
+
+	wg.Add(int(test.Swarm.NumberOfRuns))
+
+	intervalBetweenStart := uint(1000 / test.Swarm.CreationRate)
+
+	ticker := time.NewTicker(time.Duration(intervalBetweenStart) * time.Millisecond)
 
 	start := time.Now()
 
-	var err error
+	for index := uint(0); index < test.Swarm.NumberOfRuns; index++ {
 
-	for _, stage := range test.Stages {
-		err = RunStage(stage)
-		if err != nil {
-			log.Warn("End of test due to error in stage")
+		<-ticker.C
+
+		go func(t definition.Test, i uint) {
+			defer wg.Done()
+			runSingleTest(t, i)
+		}(test, index)
+	}
+
+	wg.Wait()
+
+	fmt.Printf("All tests total duration: %v\n", time.Since(start))
+
+	return nil
+}
+
+func runSingleTest(test definition.Test, testIndex uint) {
+
+	log.Infof("Test %v: starting ", testIndex)
+
+	start := time.Now()
+
+	for stageIndex, stage := range test.Stages {
+		if err := RunStage(testIndex, uint(stageIndex), stage); err != nil && !test.ContinueOnStageFailure {
+			log.Warnf("Test %v: ending prematurely due to error in stage", testIndex)
 			break
 		}
 	}
 
 	elapsed := time.Since(start)
-	log.Infof("Test total duration: %v", elapsed)
-
-	return err
+	log.Infof("Test %v: total duration: %v", testIndex, elapsed)
 }
