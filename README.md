@@ -22,6 +22,10 @@ body of a response and injecting it in the header of the next query.
 Currently, a some features and options are still missing, and some bugs are probably remaining. However, Gargote is 
 usable and the information describe in the documentation "should" just work.
 
+ * v0.1.0:
+   * Keep track of results in internal database 
+   * Add statistics 
+   * Add option continue on test failure
  * v0.0.2: 
    * Add the swarm mode
    * Add option continue on stage failure
@@ -29,7 +33,6 @@ usable and the information describe in the documentation "should" just work.
  
 Main coming features:
 
- * Keeping track of the result of each query (time, success, etc)
  * Exporting results and statistics
  * Some kind of UI ?
 
@@ -67,6 +70,7 @@ The swarm parameter allows to execute multiple times the same test, generating l
 | max_retries | uint | The number of times the stage is re-tried if the execution fails (Default: 0) |
 | delay_before | uint | A delay (in milliseconds) to wait before starting (Default: 0)  |
 | delay_after | uint | A delay (in milliseconds) to wait after (Default: 0)  |
+| continue_on_action_failure | bool | if true, in case of an action failing, the stage will follow up at the next action (Default: false) |
 | actions | List of Action | The actions |
 
 During its execution, the stage manage a list of variables. The variables are dynamically created by the capture and 

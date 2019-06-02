@@ -9,6 +9,9 @@ import (
 	"github.com/twuillemin/gargote/pkg/definition"
 )
 
+var currentNumberOfRunningTests = 0
+var maximumNumberOfRunningTests = 0
+
 // RunTest executes a Test.
 //
 // Params:
@@ -28,16 +31,17 @@ func RunTest(test definition.Test) error {
 	wg.Add(int(test.Swarm.NumberOfRuns))
 
 	intervalBetweenStart := uint(1000 / test.Swarm.CreationRate)
+	currentNumberOfRunningTests = 0
 
 	ticker := time.NewTicker(time.Duration(intervalBetweenStart) * time.Millisecond)
 
 	start := time.Now()
 
-	for index := uint(0); index < test.Swarm.NumberOfRuns; index++ {
+	for index := 0; index < int(test.Swarm.NumberOfRuns); index++ {
 
 		<-ticker.C
 
-		go func(t definition.Test, i uint) {
+		go func(t definition.Test, i int) {
 			defer wg.Done()
 			runSingleTest(t, i)
 		}(test, index)
@@ -50,19 +54,43 @@ func RunTest(test definition.Test) error {
 	return nil
 }
 
-func runSingleTest(test definition.Test, testIndex uint) {
+// GetCurrentNumberOfRunningTests returns the current number of test running in parallel. Should be zero when
+// no test is running.
+//
+// Return the current number of test running in parallel
+func GetCurrentNumberOfRunningTests() int {
+	return currentNumberOfRunningTests
+}
+
+// GetMaximumNumberOfRunningTests returns the maximum number of test running in parallel. It is the maximum of
+// GetCurrentNumberOfRunningTests.
+//
+// Return the maximum number of test running in parallel
+func GetMaximumNumberOfRunningTests() int {
+	return maximumNumberOfRunningTests
+}
+
+func runSingleTest(test definition.Test, testIndex int) {
 
 	log.Infof("Test %v: starting ", testIndex)
+
+	currentNumberOfRunningTests++
+	if currentNumberOfRunningTests > maximumNumberOfRunningTests {
+		maximumNumberOfRunningTests = currentNumberOfRunningTests
+	}
 
 	start := time.Now()
 
 	for stageIndex, stage := range test.Stages {
-		if err := RunStage(testIndex, uint(stageIndex), stage); err != nil && !test.ContinueOnStageFailure {
-			log.Warnf("Test %v: ending prematurely due to error in stage", testIndex)
+		if err := RunStage(testIndex, stageIndex, stage); err != nil && !test.ContinueOnStageFailure {
+			log.Infof("Test %v: ending prematurely due to error in stage", testIndex)
 			break
 		}
 	}
 
 	elapsed := time.Since(start)
+
+	currentNumberOfRunningTests--
+
 	log.Infof("Test %v: total duration: %v", testIndex, elapsed)
 }

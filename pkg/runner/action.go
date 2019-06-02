@@ -26,7 +26,7 @@ import (
 //  - variables: the existing variables. Note that the map is updated is the action has Capture elements.
 //
 // Return an error if the action fail, nil otherwise
-func RunAction(testIndex uint, stageIndex uint, actionIndex uint, action definition.Action, variables map[string]interface{}) error {
+func RunAction(testIndex int, stageIndex int, actionIndex int, action definition.Action, variables map[string]interface{}) error {
 
 	stageTitle := fmt.Sprintf("Action %v-%v-%v:", testIndex, stageIndex, actionIndex)
 
@@ -77,11 +77,13 @@ func RunAction(testIndex uint, stageIndex uint, actionIndex uint, action definit
 
 	// Check the response
 	if err = checkResponse(resp, body, action.Response.Validation); err != nil {
+		log.Warnf("%s ---> Error while checking the response: %v", stageTitle, err)
 		return err
 	}
 
 	// Capture the response
 	if err = saveResponse(resp, body, action.Response.Capture, variables); err != nil {
+		log.Warnf("%s ---> Error while capturing the response: %v", stageTitle, err)
 		return err
 	}
 

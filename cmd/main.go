@@ -1,8 +1,13 @@
 package main
 
 import (
+	"fmt"
+	"github.com/montanaflynn/stats"
+	"github.com/twuillemin/gargote/pkg/db"
+	"github.com/twuillemin/gargote/pkg/definition"
 	"github.com/twuillemin/gargote/pkg/loader"
 	"os"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/twuillemin/gargote/pkg/runner"
@@ -21,17 +26,27 @@ func main() {
 		FullTimestamp: false,
 	})
 
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.WarnLevel)
 
 	log.Info("Starting...")
 
-	//generateTemp()
-
+	// Load test scenario
 	test, err := loader.LoadFromFile(fileName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Create the database
+	err = db.CreateDatabase()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Display load during test
+	quitDisplayLoadChannel := make(chan struct{})
+	go displayLoad(quitDisplayLoadChannel)
+
+	// Run the tests
 	err = runner.RunTest(*test)
 	if err != nil {
 		log.Errorf("Tests finished with error: %v", err)
@@ -39,73 +54,61 @@ func main() {
 	}
 
 	log.Info("Finished successfully...\n")
+
+	quitDisplayLoadChannel <- struct{}{}
+
+	displayResults(*test)
 }
 
-// For now keep the following function just in case
-/*
-func generateExample() []byte {
+func displayLoad(quitChannel chan struct{}) {
 
-	t := definition.Test{
-		TestName: "The typicode API",
-		Stages: []definition.Stage{
-			{
-				Name:           "Basic API usage",
-				MaximumRetries: 0,
-				DelayBefore:    100,
-				DelayAfter:     100,
-				Actions: []definition.Action{
-					{
-						Name: "Get a to-do",
-						Query: definition.Query{
-							URL:    "https://jsonplaceholder.typicode.com/todos/1",
-							Method: definition.GET,
-							Headers: map[string]string{
-								"Accept": "application/json",
-							},
-						},
-						Response: definition.Response{
-							Validation: definition.Validation{
-								StatusCodes: []uint{200},
-								Headers: map[string]string{
-									"Connection": "keep-alive",
-								},
-							},
-							Capture: definition.Capture{
-								BodyJSON: map[string]string{
-									"userId": "the_user_id",
-								},
-							},
-						},
-					},
-					{
-						Name: "Get a user",
-						Query: definition.Query{
-							URL:    "https://jsonplaceholder.typicode.com/users/{{ .the_user_id }}",
-							Method: definition.GET,
-							Headers: map[string]string{
-								"Accept": "application/json",
-							},
-						},
-						Response: definition.Response{
-							Validation: definition.Validation{
-								StatusCodes: []uint{200},
-								BodyJSON: map[string]interface{}{
-									"company.name": "Romaguera-Crona",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Printf("%v / %v\n", runner.GetCurrentNumberOfRunningTests(), runner.GetMaximumNumberOfRunningTests())
+			//fmt.Printf("%v\n", runner.GetCurrentNumberOfRunningTests())
+		case <-quitChannel:
+			return
+		}
 	}
+}
 
-	y, err := yaml.Marshal(t)
+func displayResults(test definition.Test) {
+
+	results, err := db.GetAllRequests()
 	if err != nil {
-		log.Fatal(err)
+		log.Errorf("error while retrieving results: %v", err)
+		return
 	}
-	fmt.Println(string(y))
 
-	return y
+	for requestID, requestResult := range results {
+		url := test.Stages[requestID.StageIndex].Actions[requestID.ActionIndex].Query.URL
+		fmt.Printf("URL: %v, Fail: %v, Success: %v, Stats:[%v]\n", url, requestResult.NbFailure, len(requestResult.SuccessNanoTimes), getStatistics(requestResult.SuccessNanoTimes))
+	}
 }
-*/
+
+func getStatistics(rawData []int) string {
+
+	// Get the data in milliseconds (drop nano)
+	data := make([]float64, len(rawData))
+	for i, d := range rawData {
+		data[i] = float64(int(d/1000)) / 1000.0
+	}
+
+	min, _ := stats.Min(data)
+	max, _ := stats.Max(data)
+	mean, _ := stats.Mean(data)
+	median, _ := stats.Median(data)
+	variance, _ := stats.StandardDeviation(data)
+
+	return fmt.Sprintf(
+		"min: %v, max: %v, mean: %v, median: %v, variance: %v",
+		min,
+		max,
+		mean,
+		median,
+		variance)
+}

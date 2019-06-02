@@ -29,7 +29,7 @@ const (
 // Test is the structure of a test. The test is the higher level object. A Test is compose of various Stages.
 type Test struct {
 	TestName               string  `yaml:"test_name"`
-	ContinueOnStageFailure bool    `yaml:"continue_on_stage_failure"`
+	ContinueOnStageFailure bool    `yaml:"continue_on_stage_failure,omitempty"`
 	Stages                 []Stage `yaml:"stages"`
 	Swarm                  Swarm   `yaml:"swarm,omitempty"`
 }
@@ -42,11 +42,12 @@ type Swarm struct {
 
 // Stage is a logical partition inside a Test. A Stage is composed of various Actions.
 type Stage struct {
-	Name           string   `yaml:"stage_name"`
-	MaximumRetries uint     `yaml:"max_retries,omitempty"`
-	DelayBefore    uint     `yaml:"delay_before,omitempty"`
-	DelayAfter     uint     `yaml:"delay_after,omitempty"`
-	Actions        []Action `yaml:"actions"`
+	Name                    string   `yaml:"stage_name"`
+	MaximumRetries          uint     `yaml:"max_retries,omitempty"`
+	DelayBefore             uint     `yaml:"delay_before,omitempty"`
+	DelayAfter              uint     `yaml:"delay_after,omitempty"`
+	ContinueOnActionFailure bool     `yaml:"continue_on_action_failure,omitempty"`
+	Actions                 []Action `yaml:"actions"`
 }
 
 // Action is a single query/response to a REST service. Each Action is composed of one Query and One Response.

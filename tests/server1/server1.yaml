@@ -1,0 +1,100 @@
+test_name: Test server1
+# Not significant in this case as there is only a single stage
+continue_on_stage_failure: false
+# A comfortable number of users
+swarm:
+  number_of_runs: 5000
+  creation_rate: 200
+stages:
+
+  - stage_name: Get Todo
+    # No delay (default are 0 anyway)
+    delay_before: 0
+    delay_after: 0
+
+    # As action are depending one from the previous ones, do not continue in case of an error
+    # So, a failure will not generate cascading errors
+    continue_on_action_failure: false
+
+    actions:
+
+      #
+      # Start from getting a to do
+      #
+      - action_name: Start from getting a to do
+        query:
+          # Start with a fixed id, as in any case following id will be random
+          url: http://localhost:8080/todos/1
+          method: GET
+          headers:
+            Accept: application/json
+        response:
+          validation:
+            status_code:
+              - 200
+          capture:
+            body_json:
+              # Bind the field { "userId": "..." } to the variables the_user_id
+              userId: the_user_id
+
+      #
+      # Get the user of the to do
+      #
+      - action_name: Get the user of the to do
+        query:
+          # Use the variable the_user_id to patch URL
+          url: http://localhost:8080/users/{{ .the_user_id }}
+          method: GET
+          headers:
+            Accept: application/json
+        response:
+          validation:
+            status_code:
+              - 200
+            headers:
+              Content-Type: application/json
+            body_json:
+              # Check the the field { "company": {"name": "Romaguera-Crona"} } with a RegExp
+              company.name: Roma.uera-.*
+          capture:
+            body_json:
+              # Bind the field { "company": {"id": xxx} } to the variables the_company_id
+              company.id: the_company_id
+
+      #
+      # Get the company of the user
+      #
+      - action_name: Get the company of the user
+        query:
+          # Use the variable the_company_id to patch URL
+          url: http://localhost:8080/companies/{{ .the_company_id }}
+          method: GET
+          headers:
+            Accept: application/json
+        response:
+          validation:
+            status_code:
+              - 200
+            headers:
+              Content-Type: application/json
+          capture:
+            body_json:
+              # Bind the field { "ceoUserId": xxxx } to the variables the_ceo_id
+              ceoUserId: the_ceo_id
+
+      #
+      # Get the ceo of the company
+      #
+      - action_name: Get the ceo of the company
+        query:
+          # Use the variable the_ceo_id to patch URL
+          url: http://localhost:8080/users/{{ .the_ceo_id }}
+          method: GET
+          headers:
+            Accept: application/json
+        response:
+          validation:
+            status_code:
+              - 200
+            headers:
+              Content-Type: application/json
